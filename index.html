@@ -4,41 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Guitar Fret Master</title>
-    <!--以此为准：删除了 icon 引用，防止卡顿 -->
+    <title>Guitar Debug Mode</title>
 
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; background: #eee; }
+        /* 基础重置 */
+        body { margin: 0; padding: 0; font-family: sans-serif; height: 100vh; overflow: hidden; background: #eee; user-select: none; -webkit-user-select: none; }
         * { box-sizing: border-box; touch-action: manipulation; }
 
-        /* 全屏遮罩 */
+        /* 调试日志区 (屏幕底部红色区域) */
+        #debug-log {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 100px;
+            background: rgba(0,0,0,0.8); color: #ff3b30; font-size: 12px;
+            overflow-y: scroll; z-index: 99999; padding: 5px;
+            border-top: 2px solid red; font-family: monospace;
+            pointer-events: none; /* 让点击穿透 */
+        }
+
+        /* 启动遮罩 */
         #mask {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #fff; z-index: 9999;
+            background: #fff; z-index: 5000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        
-        /* 开始按钮 */
+
         #btn-go {
-            padding: 20px 60px; font-size: 24px; font-weight: bold;
+            padding: 25px 80px; font-size: 24px; font-weight: bold;
             background: #007aff; color: #fff; border: none; border-radius: 50px;
-            box-shadow: 0 5px 15px rgba(0,122,255,0.4);
-            margin-top: 20px;
+            box-shadow: 0 10px 20px rgba(0,122,255,0.3);
         }
         #btn-go:active { transform: scale(0.95); background: #0056b3; }
 
         /* 游戏主界面 */
-        #game { display: none; height: 100%; flex-direction: column; }
+        #game-view { display: none; height: 100%; flex-direction: column; }
         
         header { height: 60px; background: #fff; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; border-bottom: 1px solid #ccc; }
         
         #board-area { flex: 1; background: #f4f4f4; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        #board-scroll { width: 100%; overflow-x: auto; padding: 20px 0; text-align: center; }
+        #board-scroll { width: 100%; overflow-x: auto; padding: 20px 0; }
         
         #fretboard {
-            display: inline-block; position: relative; width: 900px; height: 220px;
+            position: relative; width: 900px; height: 220px;
             background: #e4d0a6; border-top: 5px solid #d4c095; border-bottom: 5px solid #d4c095;
-            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+            margin: 0 auto;
         }
         
         .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; }
@@ -49,30 +56,26 @@
             position: absolute; width: 30px; height: 30px; border-radius: 50%;
             background: #ff3b30; border: 3px solid #fff; box-shadow: 0 0 10px #ff3b30;
             display: none; transform: translate(-50%, -50%); z-index: 10;
-            transition: left 0.2s, top 0.2s;
         }
-        #red-dot.good { background: #34c759; box-shadow: 0 0 15px #34c759; }
 
         #keypad { height: 220px; background: #fff; padding: 10px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
         .key { background: #fff; border: 1px solid #ccc; border-bottom: 3px solid #ccc; border-radius: 8px; font-size: 18px; font-weight: bold; }
         .key:active { background: #eee; border-bottom: 1px solid #ccc; transform: translateY(2px); }
-
-        /* 错误显示区 */
-        #err-msg { color: red; font-size: 12px; position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.1); display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 启动遮罩 -->
+    <!-- 调试日志 -->
+    <div id="debug-log">Log initialized...</div>
+
+    <!-- 启动页 -->
     <div id="mask">
-        <h1>🎸 指板大师</h1>
-        <!-- 默认直接显示按钮，不再等待加载 -->
-        <button id="btn-go" onclick="startGame()">开始挑战</button>
-        <div id="err-msg"></div>
+        <h1>🎸 调试版</h1>
+        <button id="btn-go">开始挑战</button>
     </div>
 
-    <!-- 游戏界面 -->
-    <div id="game">
+    <!-- 游戏页 -->
+    <div id="game-view">
         <header>
             <div>分: <b id="sc">0</b></div>
             <div>最高: <b id="hi">0</b></div>
@@ -88,86 +91,8 @@
     </div>
 
 <script>
-    // 立即执行的脚本
-    (function() {
-        try {
-            initGameData();
-        } catch(e) {
-            document.getElementById('err-msg').style.display = 'block';
-            document.getElementById('err-msg').innerText = "Init Error: " + e.message;
-        }
-    })();
-
-    var ctx = null;
-    var score = 0, hiscore = 0;
-    var q = null;
-    var locked = false;
-    var NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    var BASES = [4, 11, 7, 2, 9, 4];
-
-    // 初始化数据和界面 (不涉及音频)
-    function initGameData() {
-        // 画指板
-        var fb = document.getElementById('fretboard');
-        for(var i=0; i<=12; i++) {
-            if(i>0) {
-                var f = document.createElement('div'); f.className='fret';
-                f.style.left = (15 + i*70) + 'px'; fb.appendChild(f);
-            } else {
-                var n = document.createElement('div'); 
-                n.style.cssText='position:absolute;left:0;width:15px;height:100%;background:#eee8d5;border-right:2px solid #aaa;';
-                fb.appendChild(n);
-            }
-            // 点
-            var cx = 15 + i*70 - 35; 
-            if(i===0) cx = 7.5; // nut
-            if([3,5,7,9].includes(i)) addD(fb, cx, false);
-            if(i===12) addD(fb, cx, true);
-        }
-        // 画弦
-        for(var s=0; s<6; s++) {
-            var st = document.createElement('div'); st.className='string';
-            st.style.height=(1+s*0.6)+'px'; st.style.top=(20+s*36)+'px';
-            fb.appendChild(st);
-        }
-        // 画键盘
-        var kp = document.getElementById('keypad');
-        NOTES.forEach(function(n){
-            var b = document.createElement('button'); b.className='key'; b.innerText=n;
-            b.ontouchstart = function(e){ e.preventDefault(); check(n, b); };
-            b.onclick = function(){ check(n, b); };
-            kp.appendChild(b);
-        });
-
-        // 读分
-        try { hiscore = localStorage.getItem('g_hi') || 0; } catch(e){}
-        upd();
-    }
-
-    function addD(p, x, db) {
-        if(!db) {
-            var d=document.createElement('div'); d.className='dot'; d.style.left=x+'px'; p.appendChild(d);
-        } else {
-            var d1=document.createElement('div'); d1.className='dot'; d1.style.left=x+'px'; d1.style.top='25%';
-            var d2=document.createElement('div'); d2.className='dot'; d2.style.left=x+'px'; d2.style.top='75%';
-            p.appendChild(d1); p.appendChild(d2);
-        }
-    }
-
-    // --- 用户点击开始 ---
-    window.startGame = function() {
-        document.getElementById('mask').style.display = 'none';
-        document.getElementById('game').style.display = 'flex';
-        
-        // 激活音频
-        try {
-            var AC = window.AudioContext || window.webkitAudioContext;
-            if(AC) { ctx = new AC(); ctx.resume(); }
-        } catch(e){}
-
-        next();
-    };
-
-    function next() {
-        locked = false;
-        var d = document.getElementById('red-dot'
+    // --- 日志工具 ---
+    function log(msg) {
+        var d = document.getElementById('debug-log');
+        d.innerHTML += "<div>> " + msg + "</div>";
+        d.scrollTop = d.scrollHeight;
