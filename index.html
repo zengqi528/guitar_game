@@ -1,23 +1,543 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Traffic Light Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ffffff">
+    <title>Fret Master - Time Attack</title>
+
     <style>
-        body { 
-            /* 1. 默认红色：代表 JS 完全没跑起来 */
-            background-color: #ff3b30; 
-            margin: 0; padding: 20px; 
-            font-family: sans-serif; 
-            color: white;
-            transition: background-color 0.5s;
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --accent-color: #007aff;
+            --correct-color: #34c759;
+            --wrong-color: #ff3b30;
+            --board-bg: #e4d0a6;
+            --header-height: 60px;
         }
-        button {
-            width: 100%; height: 100px;
-            font-size: 24px; font-weight: bold;
-            border: 4px solid white; background: rgba(0,0,0,0.2);
-            color: white; border-radius: 10px; margin-top: 20px;
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
-        #log {
-            margin-top: 20px; ba
+
+        body {
+            margin: 0; padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            /* 全局禁止选择，但在 input 中必须开启 */
+            user-select: none; -webkit-user-select: none;
+        }
+
+        /* 关键修复：允许输入框被选中和编辑 */
+        input {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+            pointer-events: auto;
+        }
+
+        /* 顶部栏 */
+        header {
+            height: var(--header-height);
+            padding: 0 15px;
+            padding-top: env(safe-area-inset-top);
+            background: rgba(255,255,255,0.95);
+            border-bottom: 1px solid #e0e0e0;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 100;
+        }
+        
+        .stat-box { text-align: center; }
+        .stat-label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
+        .stat-val { font-size: 1.2rem; font-weight: 700; color: #333; font-variant-numeric: tabular-nums; }
+        .stat-val.time { color: var(--accent-color); }
+
+        /* 游戏区域 */
+        #game-container {
+            flex: 1; position: relative;
+            display: flex; flex-direction: column; justify-content: center;
+            background: linear-gradient(to bottom, #f0f0f5, #fff);
+            overflow: hidden;
+        }
+
+        #fretboard-scroll {
+            width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
+            padding: 40px 0; display: flex; justify-content: center; 
+        }
+
+        #fretboard {
+            position: relative; min-width: 900px; height: 220px;
+            background-color: var(--board-bg);
+            background-image: repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(160,120,60,0.1) 2px, rgba(160,120,60,0.1) 4px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-top: 4px solid #d4c095; border-bottom: 4px solid #d4c095;
+            margin: 0 20px;
+        }
+
+        .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; box-shadow: 1px 0 2px rgba(0,0,0,0.3); }
+        .nut { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: #eee8d5; border-right: 2px solid #ccc; z-index: 2; }
+        
+        .inlay { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; opacity: 0.8; top: 50%; transform: translate(-50%, -50%); }
+        .inlay.double-top { top: 25%; } .inlay.double-bottom { top: 75%; }
+        .string { position: absolute; left: 0; right: 0; background: #999; box-shadow: 0 2px 3px rgba(0,0,0,0.4); pointer-events: none; z-index: 10; }
+
+        /* 标记点 */
+        #target-marker {
+            position: absolute; width: 28px; height: 28px;
+            background: var(--wrong-color); border: 3px solid #fff; border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4); z-index: 20; display: none;
+            transition: left 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1), background 0.2s;
+        }
+        #target-marker.correct { background: var(--correct-color); box-shadow: 0 0 20px var(--correct-color); }
+
+        #answer-label {
+            position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+            background: #222; color: #fff; padding: 4px 10px; border-radius: 6px;
+            font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.2s;
+            white-space: nowrap; pointer-events: none;
+        }
+
+        /* 键盘区 */
+        #controls-area {
+            background: #fff; padding: 15px 15px calc(15px + env(safe-area-inset-bottom));
+            display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
+            z-index: 100;
+        }
+
+        .note-btn {
+            background: #fff; border: 1px solid #e5e5e5; border-bottom: 4px solid #e5e5e5;
+            border-radius: 12px; height: 55px; font-size: 1.1rem; font-weight: 700; color: #333;
+            transition: transform 0.1s, border-bottom 0.1s;
+        }
+        .note-btn.sharp { background: #f2f2f7; color: #555; }
+        .note-btn:active { transform: translateY(3px); border-bottom-width: 1px; background: #f0f0f0; }
+
+        /* 遮罩层 (修复布局) */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.98); z-index: 9999;
+            display: flex; flex-direction: column; 
+            align-items: center; 
+            overflow-y: auto; /* 防止小屏内容溢出 */
+            padding: 20px;
+        }
+        
+        /* 使用伪元素或者 margin 保证内容居中但不会被裁切 */
+        .overlay::before, .overlay::after { content: ''; flex: 1; min-height: 20px; }
+        
+        .overlay h1 { margin: 0 0 20px; font-size: 2rem; flex-shrink: 0; }
+        
+        /* 设置面板 */
+        .settings-panel {
+            background: #fff; border: 1px solid #eee; border-radius: 20px;
+            padding: 25px; width: 100%; max-width: 360px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08); margin-bottom: 25px;
+            flex-shrink: 0; /* 防止被挤压 */
+        }
+        
+        .setting-row { margin-bottom: 20px; text-align: left; }
+        .setting-label { font-size: 0.9rem; font-weight: 600; color: #555; margin-bottom: 8px; display: block; }
+        
+        .radio-group { display: flex; gap: 10px; }
+        .radio-group label {
+            flex: 1; text-align: center; padding: 12px 0;
+            background: #f0f0f5; border-radius: 8px; font-weight: 600; color: #666; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.2s;
+        }
+        .radio-group input[type="radio"] { display: none; }
+        .radio-group input:checked + label {
+            background: #e6f2ff; color: var(--accent-color); border-color: var(--accent-color);
+        }
+
+        .input-group { display: flex; align-items: center; gap: 10px; }
+        .num-input {
+            flex: 1; padding: 12px; font-size: 1.2rem; text-align: center;
+            border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;
+            /* 确保输入框在手机上好点 */
+            appearance: none; -webkit-appearance: none;
+        }
+        .num-input:focus { outline: none; border-color: var(--accent-color); background: #fff; }
+
+        .btn-start {
+            background: var(--accent-color); color: white; width: 100%; max-width: 300px;
+            border: none; padding: 18px 0; font-size: 1.2rem; border-radius: 50px;
+            font-weight: bold; box-shadow: 0 10px 25px rgba(0,122,255,0.3); cursor: pointer;
+            flex-shrink: 0; margin-bottom: 20px;
+        }
+        
+        .record-display { font-size: 0.9rem; color: #888; margin-top: 15px; text-align: center; }
+        .record-display span { color: var(--accent-color); font-weight: bold; }
+
+        /* 结果页面特定 */
+        #result-time { font-size: 3rem; color: #333; margin: 10px 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .diff-tag { font-size: 0.9rem; padding: 4px 8px; border-radius: 4px; display: inline-block; vertical-align: middle; margin-left: 10px; }
+        .diff-good { background: #e6ffea; color: #28a745; }
+        .diff-bad { background: #fff0f0; color: #dc3545; }
+
+        /* 动画类 */
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+        .shake-anim { animation: shake 0.3s ease-in-out; }
+        @keyframes pop { 0%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.4)} 100%{transform:translate(-50%,-50%) scale(1)} }
+        .pop-anim { animation: pop 0.3s ease-out; }
+    </style>
+</head>
+<body>
+
+<!-- 开始界面 -->
+<div id="start-overlay" class="overlay">
+    <h1>🎸 Fret Master</h1>
+    
+    <div class="settings-panel">
+        <div class="setting-row">
+            <span class="setting-label">题目数量</span>
+            <div class="radio-group">
+                <!-- 这里的 onchange 确保点击时会更新纪录预览 -->
+                <input type="radio" name="q_count" id="q20" value="20" checked onchange="GameUI.updateRecordPreview()">
+                <label for="q20">20</label>
+                
+                <input type="radio" name="q_count" id="q40" value="40" onchange="GameUI.updateRecordPreview()">
+                <label for="q40">40</label>
+                
+                <input type="radio" name="q_count" id="q60" value="60" onchange="GameUI.updateRecordPreview()">
+                <label for="q60">60</label>
+            </div>
+        </div>
+
+        <div class="setting-row">
+            <span class="setting-label">品格范围 (0 = 空弦，最大 12)</span>
+            <div class="input-group">
+                <!-- 使用 type="tel" 在手机上呼出数字键盘 -->
+                <input type="tel" id="fret-min" class="num-input" value="0" placeholder="0" oninput="GameUI.handleInput()">
+                <span style="color:#999">—</span>
+                <input type="tel" id="fret-max" class="num-input" value="12" placeholder="12" oninput="GameUI.handleInput()">
+            </div>
+        </div>
+
+        <div class="record-display">
+            当前设置最佳纪录: <br><span id="preview-record" style="font-size: 1.2rem;">--</span>
+        </div>
+    </div>
+
+    <!-- 确保 onclick 绑定正确 -->
+    <button class="btn-start" onclick="startGame()">开始挑战</button>
+</div>
+
+<!-- 结算界面 -->
+<div id="result-overlay" class="overlay" style="display: none;">
+    <h1>挑战完成!</h1>
+    <p style="color:#666; margin:0;">本次用时</p>
+    <div id="result-time">00.00s</div>
+    
+    <div style="margin-bottom: 30px; font-size: 1rem;">
+        历史最佳: <strong id="result-best">--</strong>
+        <span id="result-diff"></span>
+    </div>
+
+    <button class="btn-start" onclick="location.reload()">再来一局</button>
+</div>
+
+<header>
+    <div class="stat-box" style="text-align: left;">
+        <span class="stat-label">进度</span>
+        <span class="stat-val" id="progress-disp">0/0</span>
+    </div>
+    <div class="stat-box" style="text-align: right;">
+        <span class="stat-label">用时</span>
+        <span class="stat-val time" id="timer-disp">00.0s</span>
+    </div>
+</header>
+
+<div id="game-container">
+    <div id="fretboard-scroll">
+        <div id="fretboard">
+            <div class="nut"></div>
+            <div id="target-marker"><div id="answer-label"></div></div>
+        </div>
+    </div>
+</div>
+
+<div id="controls-area"></div>
+
+<script>
+    // 1. 音频系统
+    var AudioSys = {
+        ctx: null,
+        init: function() {
+            try {
+                var AC = window.AudioContext || window.webkitAudioContext;
+                if(AC) this.ctx = new AC();
+            } catch(e) { console.log(e); }
+        },
+        play: function(string, fret) {
+            if(!this.ctx) return;
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            
+            var t = this.ctx.currentTime;
+            var osc = this.ctx.createOscillator();
+            var g = this.ctx.createGain();
+            
+            // 6根弦空弦频率 (High E to Low E)
+            var freqs = [329.63, 246.94, 196.00, 146.83, 110.00, 82.41];
+            
+            osc.type = 'triangle';
+            osc.frequency.value = freqs[string] * Math.pow(2, fret/12);
+            
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t+0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.8);
+
+            osc.connect(g); g.connect(this.ctx.destination);
+            osc.start(t); osc.stop(t+1);
+        }
+    };
+
+    // 2. 界面交互辅助 (必须在 startGame 之前定义)
+    var GameUI = {
+        handleInput: function() {
+            // 实时验证输入
+            var minEl = document.getElementById('fret-min');
+            var maxEl = document.getElementById('fret-max');
+            
+            // 限制长度
+            if(minEl.value.length > 2) minEl.value = minEl.value.slice(0,2);
+            if(maxEl.value.length > 2) maxEl.value = maxEl.value.slice(0,2);
+            
+            this.updateRecordPreview();
+        },
+        
+        getValidRange: function() {
+            var min = parseInt(document.getElementById('fret-min').value);
+            var max = parseInt(document.getElementById('fret-max').value);
+            
+            if(isNaN(min)) min = 0;
+            if(isNaN(max)) max = 12;
+            
+            // 边界检查
+            min = Math.max(0, Math.min(12, min));
+            max = Math.max(0, Math.min(12, max));
+            
+            // 自动纠正大小关系
+            if(min > max) {
+                var temp = min; min = max; max = temp;
+            }
+            
+            return { min: min, max: max };
+        },
+
+        updateRecordPreview: function() {
+            try {
+                var count = document.querySelector('input[name="q_count"]:checked').value;
+                // 获取当前输入框的值（可能是未验证的）
+                var minRaw = parseInt(document.getElementById('fret-min').value) || 0;
+                var maxRaw = parseInt(document.getElementById('fret-max').value) || 12;
+                
+                // 简单的展示逻辑，实际开始时会再次严格校验
+                if(minRaw > maxRaw) { var t=minRaw; minRaw=maxRaw; maxRaw=t; }
+                
+                var key = "fm_rec_" + count + "_" + minRaw + "-" + maxRaw;
+                var val = localStorage.getItem(key);
+                
+                document.getElementById('preview-record').innerText = val ? (parseFloat(val).toFixed(2) + "s") : "暂无数据";
+            } catch(e) {
+                console.log("Waiting for DOM...");
+            }
+        }
+    };
+
+    // 3. 游戏核心逻辑
+    var Game = {
+        notes: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+        bases: [4, 11, 7, 2, 9, 4],
+        
+        config: { count: 20, minF: 0, maxF: 12 },
+        currentIdx: 0,
+        startTime: 0,
+        timerInt: null,
+        lock: false,
+        q: null,
+
+        init: function(cfg) {
+            this.config = cfg;
+            this.currentIdx = 0;
+            
+            this.renderBoard();
+            this.renderControls();
+            
+            document.getElementById('progress-disp').innerText = "1 / " + this.config.count;
+            document.getElementById('timer-disp').innerText = "0.0s";
+            
+            this.startTime = Date.now();
+            if(this.timerInt) clearInterval(this.timerInt);
+            this.timerInt = setInterval(this.updateTimer.bind(this), 100);
+            
+            this.next();
+        },
+
+        renderBoard: function() {
+            var b = document.getElementById('fretboard');
+            if(b.children.length > 2) return; 
+
+            var fretW = 70, nutW = 10;
+            for(var i=1; i<=12; i++) {
+                var f = document.createElement('div');
+                f.className='fret'; f.style.left=(nutW+i*fretW)+'px'; b.appendChild(f);
+                var cx = nutW+i*fretW - fretW/2;
+                if([3,5,7,9].includes(i)) this.addDot(b, cx, false);
+                if(i===12) this.addDot(b, cx, true);
+            }
+            for(var s=0; s<6; s++) {
+                var st = document.createElement('div');
+                st.className='string'; st.style.top=(14+s*38.4)+'px'; st.style.height=(1+s*0.6)+'px';
+                b.appendChild(st);
+            }
+        },
+
+        renderControls: function() {
+            var c = document.getElementById('controls-area');
+            c.innerHTML = '';
+            var self = this;
+            this.notes.forEach(function(n) {
+                var btn = document.createElement('button');
+                btn.className = 'note-btn' + (n.includes('#')?' sharp':'');
+                btn.innerText = n;
+                // 同时绑定 Touch 和 Click
+                btn.ontouchstart = function(e){ e.preventDefault(); self.check(n, btn); };
+                btn.onclick = function(){ self.check(n, btn); };
+                c.appendChild(btn);
+            });
+        },
+
+        addDot: function(p, x, d) {
+            if(d) {
+                var d1=document.createElement('div'); d1.className='inlay double-top'; d1.style.left=x+'px';
+                var d2=document.createElement('div'); d2.className='inlay double-bottom'; d2.style.left=x+'px';
+                p.appendChild(d1); p.appendChild(d2);
+            } else {
+                var dot=document.createElement('div'); dot.className='inlay'; dot.style.left=x+'px'; p.appendChild(dot);
+            }
+        },
+
+        updateTimer: function() {
+            var diff = (Date.now() - this.startTime) / 1000;
+            document.getElementById('timer-disp').innerText = diff.toFixed(1) + 's';
+        },
+
+        next: function() {
+            this.lock = false;
+            var marker = document.getElementById('target-marker');
+            var label = document.getElementById('answer-label');
+            marker.className = ''; label.style.opacity = '0';
+            
+            var s = Math.floor(Math.random()*6);
+            var range = this.config.maxF - this.config.minF + 1;
+            var f = Math.floor(Math.random() * range) + this.config.minF;
+            
+            var noteIdx = (this.bases[s] + f) % 12;
+            this.q = { s: s, f: f, a: this.notes[noteIdx] };
+
+            var x = (f===0) ? 5 : (10 + f*70 - 35);
+            var y = 14 + s*38.4;
+            
+            marker.style.display = 'block';
+            marker.style.left = (x - 14) + 'px';
+            marker.style.top = (y - 14) + 'px';
+            
+            document.getElementById('progress-disp').innerText = (this.currentIdx + 1) + " / " + this.config.count;
+        },
+
+        check: function(ans, btn) {
+            if(this.lock) return;
+            
+            if(ans === this.q.a) {
+                this.lock = true;
+                AudioSys.play(this.q.s, this.q.f);
+                
+                var marker = document.getElementById('target-marker');
+                marker.className = 'pop-anim correct';
+                var label = document.getElementById('answer-label');
+                label.innerText = this.q.a;
+                label.style.opacity = '1';
+
+                this.currentIdx++;
+                
+                if(this.currentIdx >= this.config.count) {
+                    this.finishGame();
+                } else {
+                    setTimeout(function() { Game.next(); }, 400);
+                }
+            } else {
+                btn.classList.add('shake-anim');
+                setTimeout(function(){ btn.classList.remove('shake-anim') }, 300);
+            }
+        },
+
+        finishGame: function() {
+            clearInterval(this.timerInt);
+            var finalTime = (Date.now() - this.startTime) / 1000;
+            
+            var key = "fm_rec_" + this.config.count + "_" + this.config.minF + "-" + this.config.maxF;
+            var best = localStorage.getItem(key);
+            var isNewRecord = false;
+            
+            if(!best || finalTime < parseFloat(best)) {
+                localStorage.setItem(key, finalTime);
+                best = finalTime;
+                isNewRecord = true;
+            }
+
+            setTimeout(function() {
+                document.getElementById('result-overlay').style.display = 'flex';
+                document.getElementById('result-time').innerText = finalTime.toFixed(2) + "s";
+                document.getElementById('result-best').innerText = parseFloat(best).toFixed(2) + "s";
+                
+                var diffEl = document.getElementById('result-diff');
+                if(isNewRecord) {
+                    diffEl.innerHTML = "<span class='diff-tag diff-good'>新纪录! 🏆</span>";
+                } else {
+                    var gap = (finalTime - parseFloat(best)).toFixed(2);
+                    diffEl.innerHTML = "<span class='diff-tag diff-bad'>+" + gap + "s</span>";
+                }
+            }, 600);
+        }
+    };
+
+    // 4. 启动函数 (绑定在 Start 按钮上)
+    function startGame() {
+        var countEl = document.querySelector('input[name="q_count"]:checked');
+        if(!countEl) return;
+        
+        var count = parseInt(countEl.value);
+        
+        // 验证并修正范围
+        var range = GameUI.getValidRange();
+        
+        // 回填修正后的值到输入框，让用户知道
+        document.getElementById('fret-min').value = range.min;
+        document.getElementById('fret-max').value = range.max;
+
+        document.getElementById('start-overlay').style.display = 'none';
+        AudioSys.init();
+        
+        Game.init({
+            count: count,
+            minF: range.min,
+            maxF: range.max
+        });
+    }
+
+    // 初始化时刷新一次
+    window.onload = function() {
+        GameUI.updateRecordPreview();
+    };
+
+</script>
+</body>
+</html>
