@@ -1,58 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Debug Alert</title>
-    
-    <!-- 1. 全局错误捕获：只要有报错，立马弹窗告诉我们 -->
-    <script>
-        window.onerror = function(msg, url, line) {
-            alert("全局错误:\n" + msg + "\n行号: " + line);
-            return false;
-        };
-    </script>
-
-    <style>
-        body { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: sans-serif; background: #333; }
-        
-        /* 启动层：红色背景，非常显眼 */
-        #start-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #fff; z-index: 9999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-
-        /* 游戏层：绿色背景，便于区分 */
-        #game-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #f0f0f5; z-index: 1;
-            display: none; /* 默认隐藏 */
-            flex-direction: column;
-        }
-
-        /* 巨大的按钮 */
-        #magic-btn {
-            width: 240px; height: 100px;
-            background: blue; color: white;
-            font-size: 24px; border: none; border-radius: 20px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-            /* 强制置顶，防止被遮挡 */
-            position: relative; z-index: 10000;
-        }
-
-        /* 指板样式 */
-        #fretboard {
-            position: relative; width: 900px; height: 220px; margin: 20px;
-            background: #e4d0a6; border: 5px solid #d4c095;
-        }
-        .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #999; }
-        .string { position: absolute; left: 0; right: 0; background: #666; pointer-events: none; }
-        .dot { position: absolute; width: 20px; height: 20px; background: red; border-radius: 50%; display: none; }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Cache Buster</title>
 </head>
-<body>
+<!-- 背景设为黄色，字体设为黑色，防止白屏 -->
+<body style="background-color: #ffff00; margin: 0; padding: 20px; font-family: sans-serif;">
 
-    <!-- 启动层 -->
-    <div id="start-layer">
+    <!-- 1. 版本号标记：如果你没看到这个数字，说明缓存没清掉 -->
+    <h1 style="font-size: 50px; color: red;">版本号: V_999</h1>
+    <p>如果背景不是黄色，或者没看到V_999，说明你在看旧缓存。</p>
+
+    <!-- 2. 最原始的按钮 -->
+    <button onclick="testClick()" style="
+        width: 100%; 
+        height: 100px; 
+        background: blue; 
+        color: white; 
+        font-size: 30px; 
+        border: none;
+        border-radius: 20px;">
+        点我测试
+    </button>
+
+    <div id="log" style="margin-top: 20px; border: 1px solid #000; padding: 10px; height: 200px; overflow: scroll; background: white;">
