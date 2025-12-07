@@ -2,97 +2,57 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Guitar Final Fix</title>
+    <title>Debug Alert</title>
+    
+    <!-- 1. 全局错误捕获：只要有报错，立马弹窗告诉我们 -->
+    <script>
+        window.onerror = function(msg, url, line) {
+            alert("全局错误:\n" + msg + "\n行号: " + line);
+            return false;
+        };
+    </script>
 
     <style>
-        /* 基础样式 */
-        body { 
-            margin: 0; padding: 0; font-family: sans-serif; 
-            height: 100vh; overflow: hidden; background: #eee; 
-            user-select: none; -webkit-user-select: none; 
-        }
-        * { box-sizing: border-box; touch-action: manipulation; }
-
-        /* 1. 启动遮罩 (白色背景) */
-        #mask {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        body { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: sans-serif; background: #333; }
+        
+        /* 启动层：红色背景，非常显眼 */
+        #start-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #fff; z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
 
-        /* 2. 巨大的蓝色按钮 */
-        #btn-start {
-            width: 200px; height: 80px;
-            background: #007aff; color: white;
-            font-size: 24px; font-weight: bold;
-            border: none; border-radius: 40px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        /* 游戏层：绿色背景，便于区分 */
+        #game-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f0f0f5; z-index: 1;
+            display: none; /* 默认隐藏 */
+            flex-direction: column;
         }
-        #btn-start:active { background: #0056b3; transform: scale(0.95); }
 
-        /* 3. 游戏界面 (默认隐藏) */
-        #game-view { display: none; height: 100%; flex-direction: column; }
+        /* 巨大的按钮 */
+        #magic-btn {
+            width: 240px; height: 100px;
+            background: blue; color: white;
+            font-size: 24px; border: none; border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            /* 强制置顶，防止被遮挡 */
+            position: relative; z-index: 10000;
+        }
 
-        /* 顶部 */
-        header { height: 60px; background: #fff; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; border-bottom: 1px solid #ccc; }
-        
-        /* 指板区 */
-        #board-wrap { flex: 1; background: #f4f4f4; display: flex; align-items: center; justify-content: center; }
-        #scroll-box { width: 100%; overflow-x: auto; padding: 20px 0; text-align: center; }
-        
+        /* 指板样式 */
         #fretboard {
-            display: inline-block; position: relative; width: 900px; height: 220px;
-            background: #e4d0a6; border-top: 5px solid #d4c095; border-bottom: 5px solid #d4c095;
+            position: relative; width: 900px; height: 220px; margin: 20px;
+            background: #e4d0a6; border: 5px solid #d4c095;
         }
-        
-        .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; }
-        .string { position: absolute; left: 0; right: 0; background: #999; pointer-events: none; }
-        .dot { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; top: 50%; transform: translate(-50%,-50%); opacity: 0.8; }
-        
-        /* 红点 */
-        #marker {
-            position: absolute; width: 30px; height: 30px; border-radius: 50%;
-            background: #ff3b30; border: 3px solid #fff; box-shadow: 0 0 10px #ff3b30;
-            display: none; transform: translate(-50%, -50%); z-index: 10;
-        }
-
-        /* 键盘区 */
-        #keypad { height: 220px; background: #fff; padding: 10px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-        .key { background: #fff; border: 1px solid #ccc; border-bottom: 3px solid #ccc; border-radius: 8px; font-size: 18px; font-weight: bold; }
-        .key:active { background: #eee; border-bottom: 1px solid #ccc; transform: translateY(2px); }
-        
-        /* 调试信息 */
-        #debug { position: fixed; bottom: 0; left: 0; width: 100%; color: red; font-size: 10px; background: rgba(255,255,255,0.8); pointer-events: none; }
+        .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #999; }
+        .string { position: absolute; left: 0; right: 0; background: #666; pointer-events: none; }
+        .dot { position: absolute; width: 20px; height: 20px; background: red; border-radius: 50%; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 启动页 -->
-    <div id="mask">
-        <h1 style="margin-bottom: 30px;">🎸 吉他指板</h1>
-        <!-- 直接绑定 onclick，不依赖 JS 加载顺序 -->
-        <button id="btn-start" onclick="startGame()">开始挑战</button>
-        <div id="debug">System Ready.</div>
-    </div>
-
-    <!-- 游戏页 -->
-    <div id="game-view">
-        <header>
-            <div>分: <b id="sc">0</b></div>
-            <div>最高: <b id="hi">0</b></div>
-        </header>
-        <div id="board-wrap">
-            <div id="scroll-box">
-                <div id="fretboard">
-                    <div id="marker"></div>
-                </div>
-            </div>
-        </div>
-        <div id="keypad"></div>
-    </div>
-
-<!-- 脚本放在最后，确保 HTML 元素已存在 -->
-<script>
-    // --- 立即运行的初始化代码 ---
+    <!-- 启动层 -->
+    <div id="start-layer">
