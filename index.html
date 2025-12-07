@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
     <title>Fret Master PWA</title>
     <link rel="apple-touch-icon" href="icon.png">
 
@@ -16,14 +17,9 @@
             --correct-color: #34c759;
             --wrong-color: #ff3b30;
             --board-bg: #e4d0a6;
-            --header-height: 60px;
         }
 
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation;
-        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
         body {
             margin: 0; padding: 0;
@@ -36,30 +32,45 @@
             user-select: none; -webkit-user-select: none;
         }
 
-        /* 修复按钮点击 */
-        button {
-            user-select: none; -webkit-user-select: none;
-            pointer-events: auto; cursor: pointer;
+        /* --- 调试日志窗口 (屏幕底部) --- */
+        #debug-console {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 60px;
+            background: rgba(0,0,0,0.8); color: lime; font-family: monospace;
+            font-size: 10px; padding: 5px; overflow-y: scroll; z-index: 99999;
+            pointer-events: none; display: none; /* 默认隐藏，出错时显示 */
+            white-space: pre-wrap;
         }
 
-        /* --- UI 样式 --- */
-        header {
-            height: var(--header-height);
-            padding: 0 20px;
-            padding-top: env(safe-area-inset-top);
-            background: rgba(255,255,255,0.95);
-            border-bottom: 1px solid #e0e0e0;
-            display: flex; justify-content: space-between; align-items: center;
+        /* --- 遮罩层 --- */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.98); z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         
-        .score-board strong { font-size: 1.2rem; color: #000; }
+        /* 巨大的点击热区，确保能点到 */
+        .btn-start {
+            background: var(--accent-color); color: white;
+            border: none; padding: 25px 60px; font-size: 1.5rem; border-radius: 60px;
+            font-weight: bold; box-shadow: 0 10px 25px rgba(0,122,255,0.3);
+            margin-top: 20px; cursor: pointer;
+            position: relative; overflow: hidden;
+        }
+        /* 点击时的视觉反馈 */
+        .btn-start:active { transform: scale(0.95); background: #0056b3; }
+
+        /* --- 游戏 UI --- */
+        header {
+            height: 60px; padding: 0 20px; padding-top: env(safe-area-inset-top);
+            background: rgba(255,255,255,0.95); border-bottom: 1px solid #e0e0e0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .score-board strong { font-size: 1.2rem; }
         .high-score { text-align: right; font-size: 0.8rem; color: var(--accent-color); font-weight: 600; }
 
         #game-container {
-            flex: 1; position: relative;
-            display: flex; flex-direction: column; justify-content: center;
-            background: linear-gradient(to bottom, #f0f0f5, #fff);
-            overflow: hidden;
+            flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center;
+            background: linear-gradient(to bottom, #f0f0f5, #fff); overflow: hidden;
         }
 
         #fretboard-scroll {
@@ -77,211 +88,4 @@
         }
 
         .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; box-shadow: 1px 0 2px rgba(0,0,0,0.3); }
-        .nut { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: #eee8d5; border-right: 2px solid #ccc; z-index: 2; }
-        .inlay { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; opacity: 0.8; top: 50%; transform: translate(-50%, -50%); }
-        .inlay.double-top { top: 25%; } .inlay.double-bottom { top: 75%; }
-        .string { position: absolute; left: 0; right: 0; background: #999; box-shadow: 0 2px 3px rgba(0,0,0,0.4); pointer-events: none; z-index: 10; }
-
-        #target-marker {
-            position: absolute; width: 28px; height: 28px;
-            background: var(--wrong-color); border: 3px solid #fff; border-radius: 50%;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4); z-index: 20; display: none;
-            transition: left 0.3s, top 0.3s;
-        }
-        #target-marker.correct { background: var(--correct-color); box-shadow: 0 0 20px var(--correct-color); }
-
-        #answer-label {
-            position: absolute; top: -45px; left: 50%; transform: translateX(-50%);
-            background: #222; color: #fff; padding: 4px 10px; border-radius: 6px;
-            font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.2s;
-        }
-
-        #controls-area {
-            background: #fff; padding: 15px 15px calc(15px + env(safe-area-inset-bottom));
-            display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
-        }
-
-        .note-btn {
-            background: #fff; border: 1px solid #e5e5e5; border-bottom: 3px solid #e5e5e5;
-            border-radius: 10px; height: 55px; font-size: 1.1rem; font-weight: 700; color: #333;
-        }
-        .note-btn.sharp { background: #f2f2f7; color: #555; }
-        .note-btn:active { transform: translateY(2px); border-bottom-width: 1px; background: #f0f0f0; }
-
-        /* 遮罩层 */
-        #overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.98); z-index: 9999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        .btn-start {
-            background: var(--accent-color); color: white;
-            border: none; padding: 20px 60px; font-size: 1.4rem; border-radius: 50px;
-            font-weight: bold; box-shadow: 0 10px 25px rgba(0,122,255,0.3); margin-top: 20px;
-        }
-        
-        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
-        .shake-anim { animation: shake 0.3s; }
-        @keyframes pop { 50%{transform:translate(-50%,-50%) scale(1.4)} }
-        .pop-anim { animation: pop 0.3s; }
-    </style>
-</head>
-<body>
-
-<div id="overlay">
-    <h1 style="margin: 0 0 10px; font-size: 2rem;">🎸 Fret Master</h1>
-    <p style="color: #888; margin: 0;">PWA 修复版</p>
-    <!-- 使用原始 onclick 确保一定能触发 -->
-    <button class="btn-start" onclick="startGame()">开始挑战</button>
-</div>
-
-<header>
-    <div class="score-board"><span>当前得分</span><strong id="score">0</strong></div>
-    <div class="high-score">最高纪录<br><span id="high-score">0</span></div>
-</header>
-
-<div id="game-container">
-    <div id="fretboard-scroll">
-        <div id="fretboard">
-            <div class="nut"></div>
-            <div id="target-marker"><div id="answer-label"></div></div>
-        </div>
-    </div>
-</div>
-
-<div id="controls-area"></div>
-
-<script>
-    // 全局错误捕获：如果有报错，直接弹窗显示
-    window.onerror = function(msg, url, line) {
-        alert("错误: " + msg + "\n行号: " + line);
-        return false;
-    };
-
-    // 音频系统
-    var AudioSys = {
-        ctx: null,
-        init: function() {
-            try {
-                var AudioContext = window.AudioContext || window.webkitAudioContext;
-                if(!AudioContext) return;
-                this.ctx = new AudioContext();
-                if (this.ctx.state === 'suspended') this.ctx.resume();
-            } catch(e) { console.log(e); }
-        },
-        play: function(s, f) {
-            if(!this.ctx) return;
-            try {
-                var t = this.ctx.currentTime;
-                var osc = this.ctx.createOscillator();
-                var g = this.ctx.createGain();
-                // 频率计算
-                var freqs = [329.63, 246.94, 196.00, 146.83, 110.00, 82.41];
-                osc.type = 'sawtooth';
-                osc.frequency.value = freqs[s] * Math.pow(2, f/12);
-                
-                var filter = this.ctx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(3000, t);
-                filter.frequency.exponentialRampToValueAtTime(100, t+0.5);
-
-                g.gain.setValueAtTime(0, t);
-                g.gain.linearRampToValueAtTime(0.3, t+0.02);
-                g.gain.exponentialRampToValueAtTime(0.001, t+1.0);
-
-                osc.connect(filter); filter.connect(g); g.connect(this.ctx.destination);
-                osc.start(t); osc.stop(t+1.0);
-            } catch(e){}
-        }
-    };
-
-    // 游戏逻辑
-    var Game = {
-        score: 0,
-        highScore: 0,
-        q: null,
-        lock: false,
-        notes: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
-        bases: [4, 11, 7, 2, 9, 4],
-
-        // 懒加载 DOM，防止找不到元素
-        getEl: function(id) { return document.getElementById(id); },
-
-        init: function() {
-            // 初始化指板
-            var board = this.getEl('fretboard');
-            // 如果已经初始化过，就不再添加
-            if(board.children.length > 3) return; 
-
-            var fretW = 70, nutW = 10, padY = 14, h = 220;
-            var gap = (h - padY*2)/5;
-
-            // 品丝
-            for(var i=1; i<=12; i++) {
-                var d = document.createElement('div');
-                d.className = 'fret';
-                d.style.left = (nutW + i*fretW) + 'px';
-                board.appendChild(d);
-
-                // 点
-                var center = nutW + i*fretW - fretW/2;
-                if([3,5,7,9].includes(i)) this.addDot(board, center, false);
-                if(i===12) this.addDot(board, center, true);
-            }
-            // 弦
-            for(var s=0; s<6; s++) {
-                var str = document.createElement('div');
-                str.className = 'string';
-                str.style.height = (1+s*0.6)+'px';
-                str.style.top = (padY + s*gap)+'px';
-                board.appendChild(str);
-            }
-
-            // 按钮
-            var ctrls = this.getEl('controls-area');
-            var self = this;
-            this.notes.forEach(function(n) {
-                var b = document.createElement('button');
-                b.className = 'note-btn' + (n.indexOf('#')>-1 ? ' sharp' : '');
-                b.innerText = n;
-                // 同时绑定 Touch 和 Click 以防万一
-                b.ontouchstart = function(e) { e.preventDefault(); self.check(n, b); };
-                b.onclick = function() { self.check(n, b); };
-                ctrls.appendChild(b);
-            });
-
-            // 读取分数 (加保护)
-            try {
-                var h = localStorage.getItem('g_score');
-                if(h) this.highScore = parseInt(h);
-                this.updateUI();
-            } catch(e){}
-            
-            this.next();
-        },
-
-        addDot: function(p, x, double) {
-            if(!double) {
-                var d = document.createElement('div'); d.className='inlay';
-                d.style.left=x+'px'; p.appendChild(d);
-            } else {
-                var d1=document.createElement('div'); d1.className='inlay double-top'; d1.style.left=x+'px';
-                var d2=document.createElement('div'); d2.className='inlay double-bottom'; d2.style.left=x+'px';
-                p.appendChild(d1); p.appendChild(d2);
-            }
-        },
-
-        next: function() {
-            this.lock = false;
-            this.getEl('target-marker').className = '';
-            this.getEl('answer-label').style.opacity = '0';
-            
-            var s = Math.floor(Math.random()*6);
-            var f = Math.floor(Math.random()*13);
-            var ans = this.notes[(this.bases[s]+f)%12];
-            
-            this.q = {s:s, f:f, a:ans};
-            
-
-            // 移动红点
+        .nut { posit
