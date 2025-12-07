@@ -4,14 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- PWA 核心设置 -->
+    <!-- PWA 设置 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
     <title>Fret Master</title>
 
-    <!-- 【关键修复】这里直接关联你的 icon.png -->
-    <!-- iOS 和 安卓 (Chrome) 都会尝试读取这一行 -->
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" type="image/png" href="icon.png">
 
@@ -23,7 +21,7 @@
             --correct-color: #34c759;
             --wrong-color: #ff3b30;
             --board-bg: #e4d0a6;
-            --header-height: 60px;
+            --header-height: 50px;
         }
 
         * {
@@ -43,113 +41,145 @@
             user-select: none; -webkit-user-select: none;
         }
 
-        /* 修复输入框点击 */
         input {
             user-select: text !important;
             -webkit-user-select: text !important;
             pointer-events: auto;
         }
 
+        /* 强制横屏提示遮罩 */
+        #orientation-lock {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #333; color: #fff; z-index: 99999;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center;
+        }
+        .rotate-icon { font-size: 3rem; margin-bottom: 20px; animation: rotate-anim 2s infinite; }
+        @keyframes rotate-anim { 0% { transform: rotate(0deg); } 25% { transform: rotate(-90deg); } 100% { transform: rotate(-90deg); } }
+
+        /* 仅在竖屏时显示遮罩 */
+        @media screen and (orientation: portrait) {
+            #orientation-lock { display: flex; }
+        }
+
+        /* 顶部栏 */
         header {
             height: var(--header-height);
-            padding: 0 15px;
-            padding-top: env(safe-area-inset-top);
+            padding: 0 20px;
+            padding-top: env(safe-area-inset-top); /* 适配刘海屏 */
             background: rgba(255,255,255,0.95);
             border-bottom: 1px solid #e0e0e0;
             display: flex; justify-content: space-between; align-items: center;
             z-index: 100;
         }
         
-        .stat-box { text-align: center; }
-        .stat-label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
-        .stat-val { font-size: 1.2rem; font-weight: 700; color: #333; font-variant-numeric: tabular-nums; }
+        .stat-box { display: flex; align-items: center; gap: 10px; }
+        .stat-label { font-size: 0.8rem; color: #888; }
+        .stat-val { font-size: 1.3rem; font-weight: 700; color: #333; font-variant-numeric: tabular-nums; }
         .stat-val.time { color: var(--accent-color); }
 
+        /* 退出按钮 */
+        .btn-exit {
+            background: #ffe5e5; color: var(--wrong-color);
+            border: none; padding: 5px 12px; border-radius: 6px;
+            font-weight: bold; font-size: 0.9rem; margin-left: 15px;
+            cursor: pointer;
+        }
+        .btn-exit:active { background: #ffd0d0; }
+
+        /* 游戏区域 */
         #game-container {
             flex: 1; position: relative;
-            display: flex; flex-direction: column; justify-content: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
             background: linear-gradient(to bottom, #f0f0f5, #fff);
             overflow: hidden;
+            width: 100%;
         }
 
+        /* 指板容器：尺寸缩小 */
         #fretboard-scroll {
-            width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
-            padding: 40px 0; display: flex; justify-content: center; 
+            width: 100%; 
+            display: flex; justify-content: center; align-items: center;
+            /* 允许轻微溢出但主要为了居中 */
+            overflow: visible; 
         }
 
         #fretboard {
-            position: relative; min-width: 900px; height: 220px;
+            position: relative; 
+            /* 这里的宽度会在JS中根据品格数动态计算，但给个大概基准 */
+            height: 180px; /* 缩小高度 */
             background-color: var(--board-bg);
             background-image: repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(160,120,60,0.1) 2px, rgba(160,120,60,0.1) 4px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             border-top: 4px solid #d4c095; border-bottom: 4px solid #d4c095;
-            margin: 0 20px;
+            /* 禁止自身滚动，依靠缩放适配 */
+            flex-shrink: 0;
         }
 
-        .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; box-shadow: 1px 0 2px rgba(0,0,0,0.3); }
-        .nut { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: #eee8d5; border-right: 2px solid #ccc; z-index: 2; }
+        .fret { position: absolute; top: 0; bottom: 0; width: 2px; background: #c0c0c0; box-shadow: 1px 0 1px rgba(0,0,0,0.2); }
+        .nut { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: #eee8d5; border-right: 2px solid #ccc; z-index: 2; }
         
-        .inlay { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; opacity: 0.8; top: 50%; transform: translate(-50%, -50%); }
+        .inlay { position: absolute; width: 12px; height: 12px; background: #333; border-radius: 50%; opacity: 0.7; top: 50%; transform: translate(-50%, -50%); }
         .inlay.double-top { top: 25%; } .inlay.double-bottom { top: 75%; }
-        .string { position: absolute; left: 0; right: 0; background: #999; box-shadow: 0 2px 3px rgba(0,0,0,0.4); pointer-events: none; z-index: 10; }
+        .string { position: absolute; left: 0; right: 0; background: #888; pointer-events: none; z-index: 10; }
 
         #target-marker {
-            position: absolute; width: 28px; height: 28px;
-            background: var(--wrong-color); border: 3px solid #fff; border-radius: 50%;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4); z-index: 20; display: none;
-            transition: left 0.2s cubic-bezier(0.25, 1, 0.5, 1), top 0.2s cubic-bezier(0.25, 1, 0.5, 1), background 0.2s;
+            position: absolute; width: 22px; height: 22px;
+            background: var(--wrong-color); border: 2px solid #fff; border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5); z-index: 20; display: none;
+            transition: left 0.15s ease-out, top 0.15s ease-out; /* 移动更快一点 */
         }
-        #target-marker.correct { background: var(--correct-color); box-shadow: 0 0 20px var(--correct-color); }
+        #target-marker.correct { background: var(--correct-color); box-shadow: 0 0 15px var(--correct-color); }
 
         #answer-label {
-            position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
-            background: #222; color: #fff; padding: 4px 10px; border-radius: 6px;
-            font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.2s;
+            position: absolute; top: -35px; left: 50%; transform: translateX(-50%);
+            background: #222; color: #fff; padding: 2px 8px; border-radius: 4px;
+            font-weight: bold; font-size: 12px; opacity: 0; transition: opacity 0.2s;
             white-space: nowrap; pointer-events: none;
         }
 
+        /* 键盘区 */
         #controls-area {
-            background: #fff; padding: 15px 15px calc(15px + env(safe-area-inset-bottom));
-            display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
+            background: #fff; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+            display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.05);
             z-index: 100;
+            width: 100%;
         }
 
         .note-btn {
-            background: #fff; border: 1px solid #e5e5e5; border-bottom: 4px solid #e5e5e5;
-            border-radius: 12px; height: 55px; font-size: 1.1rem; font-weight: 700; color: #333;
-            transition: transform 0.1s, border-bottom 0.1s;
+            background: #fff; border: 1px solid #ddd; border-bottom: 3px solid #ddd;
+            border-radius: 8px; height: 45px; /* 按钮缩小一点适配横屏 */
+            font-size: 1rem; font-weight: 700; color: #333;
+            transition: transform 0.05s, background 0.1s;
         }
-        .note-btn.sharp { background: #f2f2f7; color: #555; }
-        .note-btn:active { transform: translateY(3px); border-bottom-width: 1px; background: #f0f0f0; }
+        .note-btn.sharp { background: #f4f4f7; color: #555; }
+        .note-btn:active { transform: translateY(3px); border-bottom-width: 0px; background: #eaeaea; }
 
         /* 遮罩层 */
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.98); z-index: 9999;
+            background: rgba(255,255,255,0.98); z-index: 9000;
             display: flex; flex-direction: column; 
-            align-items: center; 
-            overflow-y: auto;
-            padding: 20px;
+            align-items: center; justify-content: center;
+            overflow-y: auto; padding: 20px;
         }
         
-        .overlay::before, .overlay::after { content: ''; flex: 1; min-height: 20px; }
-        .overlay h1 { margin: 0 0 20px; font-size: 2rem; flex-shrink: 0; }
+        .overlay h1 { margin: 0 0 15px; font-size: 1.8rem; }
         
         .settings-panel {
-            background: #fff; border: 1px solid #eee; border-radius: 20px;
-            padding: 25px; width: 100%; max-width: 360px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08); margin-bottom: 25px;
-            flex-shrink: 0; 
+            background: #fff; border: 1px solid #eee; border-radius: 16px;
+            padding: 20px; width: 100%; max-width: 350px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08); margin-bottom: 20px;
         }
         
-        .setting-row { margin-bottom: 20px; text-align: left; }
-        .setting-label { font-size: 0.9rem; font-weight: 600; color: #555; margin-bottom: 8px; display: block; }
+        .setting-row { margin-bottom: 15px; text-align: left; }
+        .setting-label { font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 6px; display: block; }
         
-        .radio-group { display: flex; gap: 10px; }
+        .radio-group { display: flex; gap: 8px; }
         .radio-group label {
-            flex: 1; text-align: center; padding: 12px 0;
-            background: #f0f0f5; border-radius: 8px; font-weight: 600; color: #666; cursor: pointer;
+            flex: 1; text-align: center; padding: 8px 0; font-size: 0.9rem;
+            background: #f0f0f5; border-radius: 6px; font-weight: 600; color: #666; cursor: pointer;
             border: 2px solid transparent; transition: all 0.2s;
         }
         .radio-group input[type="radio"] { display: none; }
@@ -159,34 +189,47 @@
 
         .input-group { display: flex; align-items: center; gap: 10px; }
         .num-input {
-            flex: 1; padding: 12px; font-size: 1.2rem; text-align: center;
-            border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;
+            flex: 1; padding: 8px; font-size: 1.1rem; text-align: center;
+            border: 1px solid #ddd; border-radius: 6px; background: #f9f9f9;
             appearance: none; -webkit-appearance: none;
         }
-        .num-input:focus { outline: none; border-color: var(--accent-color); background: #fff; }
 
         .btn-start {
-            background: var(--accent-color); color: white; width: 100%; max-width: 300px;
-            border: none; padding: 18px 0; font-size: 1.2rem; border-radius: 50px;
-            font-weight: bold; box-shadow: 0 10px 25px rgba(0,122,255,0.3); cursor: pointer;
-            flex-shrink: 0; margin-bottom: 20px;
+            background: var(--accent-color); color: white; width: 100%; max-width: 280px;
+            border: none; padding: 14px 0; font-size: 1.1rem; border-radius: 50px;
+            font-weight: bold; box-shadow: 0 8px 20px rgba(0,122,255,0.3); cursor: pointer;
         }
         
-        .record-display { font-size: 0.9rem; color: #888; margin-top: 15px; text-align: center; }
-        .record-display span { color: var(--accent-color); font-weight: bold; }
-
-        #result-time { font-size: 3rem; color: #333; margin: 10px 0; font-weight: 800; font-variant-numeric: tabular-nums; }
-        .diff-tag { font-size: 0.9rem; padding: 4px 8px; border-radius: 4px; display: inline-block; vertical-align: middle; margin-left: 10px; }
+        .record-display { font-size: 0.8rem; color: #888; margin-top: 10px; text-align: center; }
+        
+        #result-time { font-size: 2.5rem; color: #333; margin: 10px 0; font-weight: 800; }
+        .diff-tag { font-size: 0.8rem; padding: 3px 6px; border-radius: 4px; display: inline-block; vertical-align: middle; margin-left: 8px; }
         .diff-good { background: #e6ffea; color: #28a745; }
         .diff-bad { background: #fff0f0; color: #dc3545; }
 
-        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
-        .shake-anim { animation: shake 0.3s ease-in-out; }
-        @keyframes pop { 0%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.4)} 100%{transform:translate(-50%,-50%) scale(1)} }
-        .pop-anim { animation: pop 0.3s ease-out; }
+        /* 动画 */
+        @keyframes pop { 50%{transform:translate(-50%,-50%) scale(1.4)} }
+        .pop-anim { animation: pop 0.2s ease-out; }
+
+        /* 错误晃动动画 (应用于整个 game-container) */
+        @keyframes screen-shake {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-8px, 4px); }
+            40% { transform: translate(8px, -4px); }
+            60% { transform: translate(-6px, 2px); }
+            80% { transform: translate(6px, -2px); }
+            100% { transform: translate(0, 0); }
+        }
+        .shake-screen { animation: screen-shake 0.4s ease-in-out; }
     </style>
 </head>
 <body>
+
+<!-- 竖屏强制提示 -->
+<div id="orientation-lock">
+    <div class="rotate-icon">⟳</div>
+    <p>为了最佳体验<br>请将手机横屏游戏</p>
+</div>
 
 <div id="start-overlay" class="overlay">
     <h1>🎸 Fret Master</h1>
@@ -197,10 +240,8 @@
             <div class="radio-group">
                 <input type="radio" name="q_count" id="q20" value="20" checked onchange="GameUI.updateRecordPreview()">
                 <label for="q20">20</label>
-                
                 <input type="radio" name="q_count" id="q40" value="40" onchange="GameUI.updateRecordPreview()">
                 <label for="q40">40</label>
-                
                 <input type="radio" name="q_count" id="q60" value="60" onchange="GameUI.updateRecordPreview()">
                 <label for="q60">60</label>
             </div>
@@ -216,7 +257,7 @@
         </div>
 
         <div class="record-display">
-            当前设置最佳纪录: <br><span id="preview-record" style="font-size: 1.2rem;">--</span>
+            最佳纪录: <span id="preview-record" style="font-weight:bold; color:#007aff;">--</span>
         </div>
     </div>
 
@@ -228,7 +269,7 @@
     <p style="color:#666; margin:0;">本次用时</p>
     <div id="result-time">00.00s</div>
     
-    <div style="margin-bottom: 30px; font-size: 1rem;">
+    <div style="margin-bottom: 20px; font-size: 0.9rem;">
         历史最佳: <strong id="result-best">--</strong>
         <span id="result-diff"></span>
     </div>
@@ -237,13 +278,13 @@
 </div>
 
 <header>
-    <div class="stat-box" style="text-align: left;">
-        <span class="stat-label">进度</span>
+    <div class="stat-box">
         <span class="stat-val" id="progress-disp">0/0</span>
     </div>
-    <div class="stat-box" style="text-align: right;">
-        <span class="stat-label">用时</span>
+    <div class="stat-box">
         <span class="stat-val time" id="timer-disp">00.0s</span>
+        <!-- 新增退出按钮 -->
+        <button class="btn-exit" onclick="location.reload()">退出</button>
     </div>
 </header>
 
@@ -281,10 +322,10 @@
             
             g.gain.setValueAtTime(0, t);
             g.gain.linearRampToValueAtTime(0.3, t+0.05);
-            g.gain.exponentialRampToValueAtTime(0.001, t+0.8);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.6);
 
             osc.connect(g); g.connect(this.ctx.destination);
-            osc.start(t); osc.stop(t+1);
+            osc.start(t); osc.stop(t+0.8);
         }
     };
 
@@ -312,7 +353,7 @@
                 if(minRaw > maxRaw) { var t=minRaw; minRaw=maxRaw; maxRaw=t; }
                 var key = "fm_rec_" + count + "_" + minRaw + "-" + maxRaw;
                 var val = localStorage.getItem(key);
-                document.getElementById('preview-record').innerText = val ? (parseFloat(val).toFixed(2) + "s") : "暂无数据";
+                document.getElementById('preview-record').innerText = val ? (parseFloat(val).toFixed(2) + "s") : "暂无";
             } catch(e) {}
         }
     };
@@ -322,6 +363,11 @@
         bases: [4, 11, 7, 2, 9, 4],
         config: { count: 20, minF: 0, maxF: 12 },
         currentIdx: 0, startTime: 0, timerInt: null, lock: false, q: null,
+
+        // 核心参数调整：缩小尺寸
+        fretW: 52, // 原来70，缩小到52
+        nutW: 8,
+        boardHeight: 180, // 原来220，缩小到180
 
         init: function(cfg) {
             this.config = cfg; this.currentIdx = 0;
@@ -337,17 +383,29 @@
         renderBoard: function() {
             var b = document.getElementById('fretboard');
             if(b.children.length > 2) return; 
-            var fretW = 70, nutW = 10;
+            
+            // 设定容器高度
+            b.style.height = this.boardHeight + 'px';
+            
+            // 动态设置宽度：确保正好包住所有品格，不多不少
+            var totalW = this.nutW + (12 * this.fretW) + 2;
+            b.style.width = totalW + 'px';
+
+            var padY = 10;
+            var gap = (this.boardHeight - padY*2)/5;
+
             for(var i=1; i<=12; i++) {
                 var f = document.createElement('div');
-                f.className='fret'; f.style.left=(nutW+i*fretW)+'px'; b.appendChild(f);
-                var cx = nutW+i*fretW - fretW/2;
+                f.className='fret'; f.style.left=(this.nutW+i*this.fretW)+'px'; b.appendChild(f);
+                var cx = this.nutW+i*this.fretW - this.fretW/2;
                 if([3,5,7,9].includes(i)) this.addDot(b, cx, false);
                 if(i===12) this.addDot(b, cx, true);
             }
             for(var s=0; s<6; s++) {
                 var st = document.createElement('div');
-                st.className='string'; st.style.top=(14+s*38.4)+'px'; st.style.height=(1+s*0.6)+'px';
+                st.className='string'; 
+                st.style.top=(padY+s*gap)+'px'; 
+                st.style.height=(1+s*0.5)+'px';
                 b.appendChild(st);
             }
         },
@@ -386,11 +444,24 @@
             var f = Math.floor(Math.random() * range) + this.config.minF;
             var noteIdx = (this.bases[s] + f) % 12;
             this.q = { s: s, f: f, a: this.notes[noteIdx] };
-            var x = (f===0) ? 5 : (10 + f*70 - 35);
-            var y = 14 + s*38.4;
+            
+            // 重新计算坐标
+            var x;
+            if(f===0) {
+                x = this.nutW / 2;
+            } else {
+                x = this.nutW + (f * this.fretW) - (this.fretW/2);
+            }
+            
+            var padY = 10;
+            var gap = (this.boardHeight - padY*2)/5;
+            var y = padY + s*gap;
+
             marker.style.display = 'block';
-            marker.style.left = (x - 14) + 'px'; marker.style.top = (y - 14) + 'px';
-            document.getElementById('progress-disp').innerText = (this.currentIdx + 1) + " / " + this.config.count;
+            marker.style.left = (x - 11) + 'px'; // 22/2 = 11
+            marker.style.top = (y - 11) + 'px';
+            
+            document.getElementById('progress-disp').innerText = (this.currentIdx + 1) + "/" + this.config.count;
         },
         check: function(ans, btn) {
             if(this.lock) return;
@@ -407,7 +478,18 @@
                     setTimeout(function() { Game.next(); }, 400);
                 }
             } else {
-                btn.classList.add('shake-anim');
+                // 错误处理
+                // 1. 手机震动 (200毫秒)
+                if (navigator.vibrate) navigator.vibrate(200);
+                
+                // 2. 屏幕晃动
+                var container = document.getElementById('game-container');
+                container.classList.remove('shake-screen'); // 重置动画
+                void container.offsetWidth; // 触发重绘
+                container.classList.add('shake-screen');
+                
+                // 3. 按钮晃动
+                btn.classList.add('shake-anim'); // 按钮晃动不做重置，简单处理即可
                 setTimeout(function(){ btn.classList.remove('shake-anim') }, 300);
             }
         },
