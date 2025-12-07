@@ -4,177 +4,170 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Guitar Fret Game</title>
-    <!-- 确保没有引用不存在的CSS/JS文件 -->
+    <title>Guitar Fret Master</title>
+    <!--以此为准：删除了 icon 引用，防止卡顿 -->
 
     <style>
-        /* --- 基础样式 --- */
-        body {
-            margin: 0; padding: 0;
-            font-family: -apple-system, sans-serif;
-            background-color: #f8f9fa;
-            height: 100vh; overflow: hidden;
-            user-select: none; -webkit-user-select: none;
-            display: flex; flex-direction: column;
-        }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        body { margin: 0; padding: 0; font-family: sans-serif; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; background: #eee; }
+        * { box-sizing: border-box; touch-action: manipulation; }
 
-        /* --- 遮罩层 (最重要) --- */
-        #start-screen {
+        /* 全屏遮罩 */
+        #mask {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #fff; z-index: 9999;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
+        
+        /* 开始按钮 */
+        #btn-go {
+            padding: 20px 60px; font-size: 24px; font-weight: bold;
+            background: #007aff; color: #fff; border: none; border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0,122,255,0.4);
+            margin-top: 20px;
+        }
+        #btn-go:active { transform: scale(0.95); background: #0056b3; }
 
-        .big-btn {
-            background: #007aff; color: white;
-            border: none; padding: 20px 60px;
-            font-size: 24px; border-radius: 50px;
-            font-weight: bold; margin-top: 30px;
-            box-shadow: 0 10px 20px rgba(0,122,255,0.3);
-        }
-        .big-btn:active { background: #0051a8; transform: scale(0.95); }
-
-        /* --- 游戏区域 --- */
-        header {
-            height: 60px; padding: 0 20px;
-            padding-top: env(safe-area-inset-top);
-            background: rgba(255,255,255,0.9);
-            border-bottom: 1px solid #ccc;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-
-        #game-area {
-            flex: 1; display: flex; flex-direction: column; justify-content: center;
-            background: #f0f0f5; position: relative;
-        }
-
-        /* 指板 */
-        #scroll-view {
-            width: 100%; overflow-x: auto; padding: 30px 0;
-            display: flex; justify-content: center;
-        }
-        #board {
-            position: relative; min-width: 900px; height: 220px;
+        /* 游戏主界面 */
+        #game { display: none; height: 100%; flex-direction: column; }
+        
+        header { height: 60px; background: #fff; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; border-bottom: 1px solid #ccc; }
+        
+        #board-area { flex: 1; background: #f4f4f4; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        #board-scroll { width: 100%; overflow-x: auto; padding: 20px 0; text-align: center; }
+        
+        #fretboard {
+            display: inline-block; position: relative; width: 900px; height: 220px;
             background: #e4d0a6; border-top: 5px solid #d4c095; border-bottom: 5px solid #d4c095;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            margin: 0 20px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
         }
+        
         .fret { position: absolute; top: 0; bottom: 0; width: 3px; background: #c0c0c0; }
         .string { position: absolute; left: 0; right: 0; background: #999; pointer-events: none; }
-        .dot { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; opacity: 0.8; transform: translate(-50%, -50%); top: 50%; }
+        .dot { position: absolute; width: 16px; height: 16px; background: #222; border-radius: 50%; top: 50%; transform: translate(-50%,-50%); opacity: 0.8; }
         
-        /* 红点 */
-        #marker {
-            position: absolute; width: 30px; height: 30px;
-            background: #ff3b30; border: 3px solid white; border-radius: 50%;
-            transform: translate(-50%, -50%); display: none;
-            box-shadow: 0 0 10px #ff3b30; transition: left 0.3s, top 0.3s;
-            z-index: 100;
+        #red-dot {
+            position: absolute; width: 30px; height: 30px; border-radius: 50%;
+            background: #ff3b30; border: 3px solid #fff; box-shadow: 0 0 10px #ff3b30;
+            display: none; transform: translate(-50%, -50%); z-index: 10;
+            transition: left 0.2s, top 0.2s;
         }
-        #marker.ok { background: #34c759; box-shadow: 0 0 15px #34c759; }
+        #red-dot.good { background: #34c759; box-shadow: 0 0 15px #34c759; }
 
-        /* 按钮区 */
-        #keypad {
-            padding: 10px; padding-bottom: calc(20px + env(safe-area-inset-bottom));
-            background: #fff; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
-        }
-        .key {
-            height: 55px; background: #fff; border: 1px solid #ddd;
-            border-bottom: 3px solid #ddd; border-radius: 8px;
-            font-size: 18px; font-weight: bold; color: #333;
-        }
-        .key:active { transform: translateY(2px); border-bottom: 1px solid #ddd; background: #eee; }
+        #keypad { height: 220px; background: #fff; padding: 10px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .key { background: #fff; border: 1px solid #ccc; border-bottom: 3px solid #ccc; border-radius: 8px; font-size: 18px; font-weight: bold; }
+        .key:active { background: #eee; border-bottom: 1px solid #ccc; transform: translateY(2px); }
+
+        /* 错误显示区 */
+        #err-msg { color: red; font-size: 12px; position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.1); display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 1. 启动界面 -->
-    <div id="start-screen">
-        <h1 style="font-size: 32px; margin-bottom: 10px;">🎸 指板大师</h1>
-        <p id="status-text" style="color: #666;">系统加载中...</p>
-        <button id="btn-play" class="big-btn" style="display:none;">开始挑战</button>
+    <!-- 启动遮罩 -->
+    <div id="mask">
+        <h1>🎸 指板大师</h1>
+        <!-- 默认直接显示按钮，不再等待加载 -->
+        <button id="btn-go" onclick="startGame()">开始挑战</button>
+        <div id="err-msg"></div>
     </div>
 
-    <!-- 2. 游戏界面 -->
-    <header>
-        <div>得分: <b id="score">0</b></div>
-        <div style="text-align:right; font-size: 12px; color:#888;">最高分<br><b id="hiscore" style="font-size:16px; color:#007aff;">0</b></div>
-    </header>
-
-    <div id="game-area">
-        <div id="scroll-view">
-            <div id="board">
-                <div id="marker"></div>
+    <!-- 游戏界面 -->
+    <div id="game">
+        <header>
+            <div>分: <b id="sc">0</b></div>
+            <div>最高: <b id="hi">0</b></div>
+        </header>
+        <div id="board-area">
+            <div id="board-scroll">
+                <div id="fretboard">
+                    <div id="red-dot"></div>
+                </div>
             </div>
         </div>
+        <div id="keypad"></div>
     </div>
 
-    <div id="keypad"></div>
-
 <script>
-    // --- 逻辑部分 ---
-    
-    // 全局变量
-    var ctx = null; // AudioContext
-    var score = 0;
-    var hiscore = 0;
-    var currentQ = null;
-    var isLock = false;
-
-    // 数据
-    var NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    var BASES = [4, 11, 7, 2, 9, 4]; // 6根弦空弦音程
-
-    // 1. 页面加载完成后才运行，防止白屏
-    window.onload = function() {
-        console.log("Page Loaded");
-        
-        // 显示按钮
-        document.getElementById('status-text').innerText = "准备就绪";
-        document.getElementById('btn-play').style.display = "block";
-
-        // 初始化UI
-        initBoard();
-        initKeys();
-        loadScore();
-
-        // 绑定开始按钮
-        var btn = document.getElementById('btn-play');
-        btn.addEventListener('touchstart', startGame, {passive: false});
-        btn.addEventListener('click', startGame);
-    };
-
-    // 2. 开始游戏 (核心：在这里初始化音频)
-    function startGame(e) {
-        if(e) { e.preventDefault(); e.stopPropagation(); }
-
-        // 隐藏遮罩
-        document.getElementById('start-screen').style.display = 'none';
-
-        // 初始化音频 (必须在点击事件里)
+    // 立即执行的脚本
+    (function() {
         try {
-            var AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (AudioContext) {
-                ctx = new AudioContext();
-                ctx.resume(); // iOS 强制 resume
-            }
-        } catch(err) {
-            console.error(err);
+            initGameData();
+        } catch(e) {
+            document.getElementById('err-msg').style.display = 'block';
+            document.getElementById('err-msg').innerText = "Init Error: " + e.message;
         }
+    })();
 
-        // 出第一题
-        nextQuestion();
+    var ctx = null;
+    var score = 0, hiscore = 0;
+    var q = null;
+    var locked = false;
+    var NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    var BASES = [4, 11, 7, 2, 9, 4];
+
+    // 初始化数据和界面 (不涉及音频)
+    function initGameData() {
+        // 画指板
+        var fb = document.getElementById('fretboard');
+        for(var i=0; i<=12; i++) {
+            if(i>0) {
+                var f = document.createElement('div'); f.className='fret';
+                f.style.left = (15 + i*70) + 'px'; fb.appendChild(f);
+            } else {
+                var n = document.createElement('div'); 
+                n.style.cssText='position:absolute;left:0;width:15px;height:100%;background:#eee8d5;border-right:2px solid #aaa;';
+                fb.appendChild(n);
+            }
+            // 点
+            var cx = 15 + i*70 - 35; 
+            if(i===0) cx = 7.5; // nut
+            if([3,5,7,9].includes(i)) addD(fb, cx, false);
+            if(i===12) addD(fb, cx, true);
+        }
+        // 画弦
+        for(var s=0; s<6; s++) {
+            var st = document.createElement('div'); st.className='string';
+            st.style.height=(1+s*0.6)+'px'; st.style.top=(20+s*36)+'px';
+            fb.appendChild(st);
+        }
+        // 画键盘
+        var kp = document.getElementById('keypad');
+        NOTES.forEach(function(n){
+            var b = document.createElement('button'); b.className='key'; b.innerText=n;
+            b.ontouchstart = function(e){ e.preventDefault(); check(n, b); };
+            b.onclick = function(){ check(n, b); };
+            kp.appendChild(b);
+        });
+
+        // 读分
+        try { hiscore = localStorage.getItem('g_hi') || 0; } catch(e){}
+        upd();
     }
 
-    // 3. 播放声音
-    function playSound(s, f) {
-        if (!ctx) return;
+    function addD(p, x, db) {
+        if(!db) {
+            var d=document.createElement('div'); d.className='dot'; d.style.left=x+'px'; p.appendChild(d);
+        } else {
+            var d1=document.createElement('div'); d1.className='dot'; d1.style.left=x+'px'; d1.style.top='25%';
+            var d2=document.createElement('div'); d2.className='dot'; d2.style.left=x+'px'; d2.style.top='75%';
+            p.appendChild(d1); p.appendChild(d2);
+        }
+    }
+
+    // --- 用户点击开始 ---
+    window.startGame = function() {
+        document.getElementById('mask').style.display = 'none';
+        document.getElementById('game').style.display = 'flex';
+        
+        // 激活音频
         try {
-            var t = ctx.currentTime;
-            var osc = ctx.createOscillator();
-            var g = ctx.createGain();
-            
-            // 频率计算
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if(AC) { ctx = new AC(); ctx.resume(); }
+        } catch(e){}
+
+        next();
+    };
+
+    function next() {
+        locked = false;
+        var d = document.getElementById('red-dot'
